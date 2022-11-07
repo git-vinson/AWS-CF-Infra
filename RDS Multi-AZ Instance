@@ -1,0 +1,193 @@
+####################################################################################################
+# ?? 2022 Amazon Web Services, Inc. or its affiliates. All Rights Reserved.                         #
+#                                                                                                  #
+# This AWS Content is provided subject to the terms of the AWS Customer Agreement                  #
+# available at http://aws.amazon.com/agreement or other written agreement between                  #
+# Customer and either Amazon Web Services, Inc. or Amazon Web Services EMEA SARL or both.          #
+####################################################################################################
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >-
+  Creates a Postgres Multi-AZ RDS Instance.
+
+Parameters:
+  DBName:
+    Type: String
+    Description: The name of the RDS instance. (Must contain 1 to 64 letters or numbers.)
+    MinLength: '1'
+    MaxLength: '64'
+#   AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+  Vpc:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC where the cluster will reside.
+  DBSubnetGroup:
+    Type: String
+    Description: The name of the subnet group.
+#  DBEngine:
+#    Type: String
+#    Default: postgres
+  DBEngineVersion:
+    Type: String
+    AllowedValues:
+      - postgres12
+      - postgres13
+      - postgres14
+    Description: The version number of the database engine to use.
+    Default: postgres13
+  DBInstanceType:
+    Type: String
+    Description: The type of the db instance.
+    Default: db.t3.micro
+  DBStorageType:
+    Type: String
+    Description: The storage type of the db instance.
+    AllowedValues:
+      - gp2
+      - io1
+  DBStorage:
+    Type: Number
+    Description: The allocated storage for the db instance.
+    MinValue: 100
+    MaxValue: 65536
+  DBIops:
+    Type: Number
+    Description: The iops for the storage (required for io1 storage type).
+    MinValue: 1000
+    Default: 1000
+  DBUsername:
+    NoEcho: 'true'
+    Description: Username for Postgres database access
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: Password MySQL database access
+    Type: String
+    MinLength: '8'
+    MaxLength: '128'
+    AllowedPattern: '^((?![\/"@])[\x21-\x7E])*$'
+    ConstraintDescription: Can include any printable ASCII character except "/", """, or "@".
+  DBPasswordConfirm:
+    NoEcho: 'true'
+    Description: Confirm Password for MySQL database access
+    Type: String
+    MinLength: '8'
+    MaxLength: '128'
+    AllowedPattern: '^((?![\/"@])[\x21-\x7E])*$'
+    ConstraintDescription: Can include any printable ASCII character except "/", """, or "@".
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: RDS Instance Details
+        Parameters:
+          - DBName
+          - Vpc
+          - DBSubnetGroup
+          - DBEngine
+          - DBEngineVersion
+          - DBInstanceType
+          - DBStorageType
+          - DBStorage
+          - DBIops
+      - Label:
+          default: RDS Connection Details
+        Parameters:
+          - DBUsername
+          - DBPassword
+          - DBPasswordConfirm
+    ParameterLabels:
+      DBName:
+        default: RDS Instance Name
+      Vpc:
+        default: VPC
+      DBSubnetGroup:
+        default: RDS Instance Subnet Group
+      DBEngine:
+        default: RDS Instance Engine
+      DBEngineVersion:
+        default: RDS Instance Engine Version
+      DBInstanceType:
+        default: RDS Instance Type
+      DBStorageType:
+        default: RDS Storage Type
+      DBStorage:
+        default: RDS Storage Allocation
+      DBIops:
+        default: RDS Storage IOPS
+      DBUsername:
+        default: Database Username
+      DBPassword:
+        default: Database Password
+      DBPasswordConfirm:
+        default: Confirm Database Password
+Rules:
+  MatchPasswords:
+    Assertions:
+      - Assert:
+          Fn::Equals:
+            - !Ref DBPassword
+            - !Ref DBPasswordConfirm
+        AssertDescription: 'Passwords do not match'
+Mappings:
+  EngineVersionMap:
+    postgres12:
+      version: 12.11
+      family: postgres12
+    postgres13:
+      version: 13.7
+      family: postgres13
+    postgres14:
+      version: 14.4
+      family: postgres14
+Conditions:
+  IsIO: !Equals
+    - !Ref DBStorageType
+    - io1
+Resources:
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DeletionProtection: true
+      MultiAZ: true
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref RDSSg
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref RDSParameterGroup
+      DBInstanceIdentifier: !Ref DBName
+      Engine: postgres
+      EngineVersion: !FindInMap
+        - EngineVersionMap
+        - !Ref DBEngineVersion
+        - version
+      DBInstanceClass: !Ref DBInstanceType
+      StorageEncrypted: true
+      StorageType: !Ref DBStorageType
+      Iops:
+        Fn::If:
+          - IsIO
+          - Ref: DBIops
+          - Ref: AWS::NoValue
+      AllocatedStorage: !Ref DBStorage
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+  RDSParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Sub Paramter group for ${DBName} RDS Instance
+      Family: !FindInMap
+        - EngineVersionMap
+        - !Ref DBEngineVersion
+        - family
+  RDSSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS
+      GroupName: !Sub ${DBName}RDSSG
+      VpcId: !Ref Vpc
