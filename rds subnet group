@@ -1,0 +1,48 @@
+####################################################################################################
+# ? 2022 Amazon Web Services, Inc. or its affiliates. All Rights Reserved.                         #
+#                                                                                                  #
+# This AWS Content is provided subject to the terms of the AWS Customer Agreement                  #
+# available at http://aws.amazon.com/agreement or other written agreement between                  #
+# Customer and either Amazon Web Services, Inc. or Amazon Web Services EMEA SARL or both.          #
+####################################################################################################
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >-
+  Creates a RDS Subnet Group to designate which subnets the RDS instances will reside in.
+
+Parameters:
+  SubnetGroupName:
+    Type: String
+    Description: The name of the subnet group.
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The subnets where the RDS instances will reside.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Subnet Group Details
+        Parameters:
+          - SubnetGroupName
+          - SubnetIds
+    ParameterLabels:
+      SubnetGroupName:
+        default: Subnet Group Name
+      SubnetIds:
+        default: RDS Instance Subnets
+
+Resources:
+  #RDS Subnet Group
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Data Subnet Group for RDS Instances
+      DBSubnetGroupName: !Ref SubnetGroupName
+      SubnetIds: !Ref SubnetIds
+
+Outputs:
+  DBSubnetGroup:
+    Description: RDS Subnet Group Name
+    Value: !Ref RDSSubnetGroup
