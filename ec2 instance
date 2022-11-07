@@ -1,0 +1,140 @@
+####################################################################################################
+# ?? 2022 Amazon Web Services, Inc. or its affiliates. All Rights Reserved.                        #
+#                                                                                                  #
+# This AWS Content is provided subject to the terms of the AWS Customer Agreement                  #
+# available at http://aws.amazon.com/agreement or other written agreement between                  #
+# Customer and either Amazon Web Services, Inc. or Amazon Web Services EMEA SARL or both.          #
+####################################################################################################
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >-
+  Creates an EC2 Instance with an encrypted EBS volume by default.
+
+Parameters:
+  Vpc:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC where the instance will reside.
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: The subnet where the instance will reside.
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: The instance type of the instance.
+  EbsType:
+    Type: String
+    Default: gp2
+    AllowedValues:
+      - gp2
+      - gp3
+    Description: The EBS volume type of the instance.
+  EbsSize:
+    Type: String
+    Default: 8
+    Description: The EBS volume size of the instance.
+  Image:
+    Type: String
+    Default: ami-0f62d9254ca98e1aa
+    Description: Base image for the instance.
+  Name:
+    Type: String
+    Description: Name of the instance.
+    AllowedPattern: ^[a-zA-Z0-9-_@.,=+]*$
+    ConstraintDescription: "Malformed input: Use alphanumeric and '+=,.@-_' characters."
+  KeypairName:
+    Type: String
+    Description: Name of the keypair.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: EC2 Instance Details
+        Parameters:
+          - Vpc
+          - SubnetId
+          - InstanceType
+          - EbsType
+          - EbsSize
+          - Image
+          - Name
+      - Label:
+          default: Key Pair Details
+        Parameters:
+          - KeypairName
+    ParameterLabels:
+      Vpc:
+        default: VPC
+      SubnetId:
+        default: EC2 Instance Subnet
+      InstanceType:
+        default: EC2 Instance Type
+      EbsType:
+        default: EBS Volume Type
+      EbsSize:
+        default: EBS Volume Size
+      Image:
+        default: AMI to be used for the EC2 Instance
+      Name:
+        default: The name of the EC2 Instance
+      Keypair:
+        default: Key pair name
+Conditions:
+  NoKeypair: !Equals
+    - !Ref KeypairName
+    - ''
+Resources:
+  #EKS Cluster
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref EbsSize
+            VolumeType: !Ref EbsType
+            Encrypted: true
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !Ref Image
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds:
+        - !Ref Sg
+      SubnetId: !Ref SubnetId
+      KeyName:
+        Fn::If:
+          - NoKeypair
+          - Ref: AWS::NoValue
+          - Ref: KeypairName
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+  Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Security group for ${Name} Instance
+      GroupName: !Sub ${Name}InstanceSG
+      VpcId: !Ref Vpc
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${Name}InstanceRole
+      Roles:
+        - !Ref InstanceRole
+
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub ${Name}Role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
