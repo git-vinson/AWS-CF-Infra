@@ -1,0 +1,91 @@
+####################################################################################################
+# ? 2022 Amazon Web Services, Inc. or its affiliates. All Rights Reserved.                         #
+#                                                                                                  #
+# This AWS Content is provided subject to the terms of the AWS Customer Agreement                  #
+# available at http://aws.amazon.com/agreement or other written agreement between                  #
+# Customer and either Amazon Web Services, Inc. or Amazon Web Services EMEA SARL or both.          #
+####################################################################################################
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >-
+  Creates a interface endpoints for session manager without internet gateway.
+
+Parameters:
+  Vpc:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC where the endpoint will reside.
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The subnets where the RDS instances will reside.
+  Cidr:
+    Type: String
+    Default: 10.243.0.0/21
+    Description: The CIDR range of the VPC to be used as ingress source for the endpoints
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Interface Endpoint Details
+        Parameters:
+          - Vpc
+          - SubnetIds
+      - Label:
+          default: Security Group Details
+        Parameters:
+          - Cidr
+    ParameterLabels:
+      Vpc:
+        default: VPC
+      RouteTableId:
+        default: Route Table ID
+      Cidr:
+        default: VPC CIDR range
+
+Resources:
+  SSMMessagesInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref Sg
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      SubnetIds: !Ref SubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  EC2MessagesInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref Sg
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+      SubnetIds: !Ref SubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  SSMInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref Sg
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      SubnetIds: !Ref SubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Security group for Session Manager Interface Endpoints
+      GroupName: !Sub SessionManagerInterfaceEndpointsSG
+      VpcId: !Ref Vpc
+  SgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from the VPC
+      GroupId: !Ref Sg
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref Cidr
